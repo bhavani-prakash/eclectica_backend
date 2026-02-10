@@ -18,6 +18,9 @@ app.use(express.json());
 // ROUTES
 app.use("/api", registrationRouter);
 app.use('/admin', adminRoutes);
+app.get("/", (req, res) => {
+  res.send("Welcome to the ECLECTICA 2K26 Registration API");
+});
 
 
 // TEST ROUTE
