@@ -12,14 +12,17 @@ export const sendConfirmationEmail = async (to, name, eventName) => {
     subject: `Registration Confirmed – ${eventName}`,
     html: `
       <h2>Hello ${name} </h2>
-      <p>Your registration for <b>${eventName}</b> at ECLECTICA 2K26 has been confirmed! ✨</p>
+      <p>Your registration for  <b>${eventName}</b>  at ECLECTICA 2K26 has been confirmed!</p>
 
       <p><b> Date:</b> March 13, 2026</p>
       <p><b>Venue:</b> MITS - Lakshmi Block</p>
       <p><b>Registered Event:</b> ${eventName}</p>
 
       <br/>
-      <p>Phone: +91 86884 97800</p>
+      <p> If you have any questions feel free to reach out to us at:</p>
+      <p>Phone: +91 86884 97800</p><br>
+      
+      <p> Thank you for registering..</p>
       <p>Team ECLECTICA 2K26</p>
     `,
   };
