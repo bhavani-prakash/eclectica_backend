@@ -20,10 +20,7 @@ export const adminLogin = async (req, res) => {
       return res.status(401).json({ message: 'Not an admin' });
     }
 
-    const isMatch = await bcrypt.compare(
-      password,
-      process.env.ADMIN_PASSWORD
-    );
+    const isMatch = await bcrypt.compare(password, hashedAdminPassword);
 
     if (!isMatch) {
       return res.status(401).json({ message: 'Wrong password' });
