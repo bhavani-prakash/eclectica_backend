@@ -20,7 +20,10 @@ export const adminLogin = async (req, res) => {
       return res.status(401).json({ message: 'Not an admin' });
     }
 
-    const isMatch = await bcrypt.compare(password, hashedAdminPassword);
+    const isMatch = await bcrypt.compare(
+      password,
+      process.env.ADMIN_PASSWORD
+    );
 
     if (!isMatch) {
       return res.status(401).json({ message: 'Wrong password' });
@@ -37,7 +40,6 @@ export const adminLogin = async (req, res) => {
     res.status(500).json({ message: 'Admin login failed' });
   }
 };
-
 // ✅ Admin Dashboard (Fetch registrations)
 export const adminDashboard = async (req, res) => {
   try {
