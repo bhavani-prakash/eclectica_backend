@@ -12,6 +12,7 @@ const registrationSchema = new mongoose.Schema(
     department: { type: String, required: true },
     event: { type: String, required: true },
     utrnumber: { type: String, required: true },
+    paymentScreenshot:{type: String , required: true}
   },
   { timestamps: true }
 );

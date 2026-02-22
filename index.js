@@ -28,6 +28,17 @@ app.get("/test", (req, res) => {
   res.json({ message: "Backend working" });
 });
 
+// Global error handler - ensure errors are returned as JSON (helps frontend)
+app.use((err, req, res, next) => {
+  console.error('Global error handler:', err);
+  const status = err.status || 500;
+  res.status(status).json({
+    success: false,
+    message: err.message || 'Internal Server Error',
+    // include error details only in development
+    ...(process.env.NODE_ENV === 'development' ? { error: err } : {}),
+  });
+});
 // MONGODB CONNECTION + SERVER START
 const PORT = 5000;
 
