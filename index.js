@@ -11,7 +11,8 @@ const app = express();
 
 // MIDDLEWARE
 app.use(cors({
-  origin: true, // React (Vite)
+  origin: "https://eclectica2k26-registration.netlify.app/",  
+  credentials: true // React (Vite)
 }));
 app.use(express.json());
 
