@@ -181,6 +181,13 @@ export const getPermissionLetterPDF = async (req, res) => {
     // Set response headers
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="permission_letter_${registration.rollnumber}_${registration.event.replace(/\s+/g, '_')}.pdf"`);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+    // Add error handling for response stream
+    res.on('error', (err) => {
+      console.error("Response stream error:", err);
+      doc.end();
+    });
 
     // Pipe PDF to response
     doc.pipe(res);
@@ -257,17 +264,27 @@ export const getPermissionLetterPDF = async (req, res) => {
 
     // Add text below QR code
     doc.fontSize(8).font('Helvetica').text('Scan this QR code to verify the student\'s registration details.', 60, 700, { width: 90, align: 'center' });
-  
+    
 
     // Add signature at bottom right
     doc.fontSize(10).font('Helvetica').text('Head of the Department', 380, 550, { width: 150, align: 'center' });
     doc.fontSize(10).text('Department of ' + (registration.department || '_______________'), 380, 560, { width: 150, align: 'center' });
 
+    // Add error handling for document stream
+    doc.on('error', (err) => {
+      console.error("PDF document stream error:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: 'Error generating PDF.' });
+      }
+    });
+
     // Finalize PDF
     doc.end();
   } catch (error) {
     console.error("Permission letter PDF error:", error);
-    res.status(500).json({ success: false, message: 'Server error. Please try again later.' });
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Server error. Please try again later.' });
+    }
   }
 };
 
