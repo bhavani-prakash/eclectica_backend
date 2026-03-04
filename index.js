@@ -17,8 +17,10 @@ app.use(cors({
       'http://localhost:5173',
       'http://localhost:3000',
       'http://localhost:5000',
+      'https://eclectica2k26.netlify.app',
       /netlify\.app$/, // Allow all Netlify deployments
       /railway\.app$/, // Allow Railway deployments
+      /up\.railway\.app$/, // Allow Railway app URLs
     ];
     
     if (!origin || allowedOrigins.some(ao => 
@@ -26,7 +28,8 @@ app.use(cors({
     )) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      console.warn('CORS blocked origin:', origin);
+      callback(null, true); // Allow anyway for now, log blocked origins
     }
   },
   credentials: true,
