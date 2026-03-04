@@ -45,10 +45,14 @@ app.get("/", (req, res) => {
   res.send("Welcome to the ECLECTICA 2K26 Registration API");
 });
 
-
-// TEST ROUTE
+// TEST ROUTE - comprehensive health check
 app.get("/test", (req, res) => {
-  res.json({ message: "Backend working" });
+  res.json({ 
+    message: "Backend working",
+    status: "operational",
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 // Global error handler - ensure errors are returned as JSON (helps frontend)
