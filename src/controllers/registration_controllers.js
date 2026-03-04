@@ -145,6 +145,7 @@ export const getRegistrations = async (req, res) => {
 
 // POST /api/permission-letter-pdf
 export const getPermissionLetterPDF = async (req, res) => {
+  let doc;
   try {
     const { rollnumber, event } = req.body;
     if (!rollnumber || !event) {
@@ -153,6 +154,7 @@ export const getPermissionLetterPDF = async (req, res) => {
     if (typeof rollnumber !== 'string' || typeof event !== 'string') {
       return res.status(400).json({ success: false, message: 'Invalid input type.' });
     }
+    
     const registration = await Registration.findOne({ rollnumber: rollnumber.trim(), event: event.trim() });
     if (!registration) {
       return res.status(404).json({ success: false, message: 'No registration found for this roll number and event.' });
@@ -169,16 +171,22 @@ export const getPermissionLetterPDF = async (req, res) => {
       timestamp: new Date().toISOString()
     });
 
-    // Generate QR code image
-    const qrImage = await QRCode.toDataURL(qrData, { width: 200 });
+    // Generate QR code image with error handling
+    let qrImage;
+    try {
+      qrImage = await QRCode.toDataURL(qrData, { width: 200 });
+    } catch (qrError) {
+      console.error("QR code generation error:", qrError);
+      return res.status(500).json({ success: false, message: 'Error generating QR code.' });
+    }
 
     // Create PDF document with wider margins to accommodate content
-    const doc = new PDFDocument({
+    doc = new PDFDocument({
       margins: { top: 50, left: 60, right: 60, bottom: 100 },
       size: 'A4'
     });
 
-    // Set response headers
+    // Set response headers BEFORE piping
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="permission_letter_${registration.rollnumber}_${registration.event.replace(/\s+/g, '_')}.pdf"`);
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -186,7 +194,19 @@ export const getPermissionLetterPDF = async (req, res) => {
     // Add error handling for response stream
     res.on('error', (err) => {
       console.error("Response stream error:", err);
-      doc.end();
+      if (doc && !doc.writableEnded) {
+        doc.end();
+      }
+    });
+
+    // Add error handling for document stream BEFORE piping
+    doc.on('error', (err) => {
+      console.error("PDF document stream error:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: 'Error generating PDF.' });
+      } else {
+        res.end();
+      }
     });
 
     // Pipe PDF to response
@@ -258,9 +278,14 @@ export const getPermissionLetterPDF = async (req, res) => {
     doc.fontSize(10).text('MITS Deemed to be University', { align: 'left' });
     doc.fontSize(10).text('Madanapalle', { align: 'left' });
 
-    // Add QR code at bottom left
-    const qrImageBuffer = Buffer.from(qrImage.split(',')[1], 'base64');
-    doc.image(qrImageBuffer, 60, 600, { width: 90, height: 90 });
+    // Add QR code at bottom left with error handling
+    try {
+      const qrImageBuffer = Buffer.from(qrImage.split(',')[1], 'base64');
+      doc.image(qrImageBuffer, 60, 600, { width: 90, height: 90 });
+    } catch (imgError) {
+      console.error("QR image processing error:", imgError);
+      // Continue without QR code if it fails
+    }
 
     // Add text below QR code
     doc.fontSize(8).font('Helvetica').text('Scan this QR code to verify the student\'s registration details.', 60, 700, { width: 90, align: 'center' });
@@ -270,20 +295,20 @@ export const getPermissionLetterPDF = async (req, res) => {
     doc.fontSize(10).font('Helvetica').text('Head of the Department', 380, 550, { width: 150, align: 'center' });
     doc.fontSize(10).text('Department of ' + (registration.department || '_______________'), 380, 560, { width: 150, align: 'center' });
 
-    // Add error handling for document stream
-    doc.on('error', (err) => {
-      console.error("PDF document stream error:", err);
-      if (!res.headersSent) {
-        res.status(500).json({ success: false, message: 'Error generating PDF.' });
-      }
-    });
-
     // Finalize PDF
     doc.end();
   } catch (error) {
     console.error("Permission letter PDF error:", error);
+    // Ensure we send a response
     if (!res.headersSent) {
       res.status(500).json({ success: false, message: 'Server error. Please try again later.' });
+    } else {
+      // Headers already sent, just end the response
+      if (doc && !doc.writableEnded) {
+        doc.end();
+      } else {
+        res.end();
+      }
     }
   }
 };

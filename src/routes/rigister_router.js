@@ -9,7 +9,11 @@ import {
 
 const router = express.Router();
 
-
+// Logging middleware
+router.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
 
 router.post("/create-order", createOrder);
 router.post("/verify-payment", verifyPayment);
