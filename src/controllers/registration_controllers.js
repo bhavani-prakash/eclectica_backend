@@ -1,29 +1,57 @@
 import Registration from "../models/registration_model.js";
 import { sendConfirmationEmail } from '../utils/sendMail.js';
+import Razorpay from 'razorpay';
+import crypto from 'crypto';
+import PDFDocument from 'pdfkit';
+import QRCode from 'qrcode';
 
-// POST /api/register
-export const createRegistration = async (req, res) => {
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
+
+// Event fee mapping
+const eventFees = {
+  'Paper Presentation': 150,
+  'Tech Quiz': 100,
+  'Project Expo': 200,
+  'Circuit Debugging': 120,
+  'Photography': 80,
+  'Gaming': 100,
+  'Treasure Hunt': 90,
+  'Debate': 70
+};
+
+// POST /api/create-order
+export const createOrder = async (req, res) => {
   try {
-    console.log("BODY:", req.body); // 🔥 DEBUG LINE
-    console.log("FILE:", req.file);
+    const { email, name, rollnumber, event } = req.body;
+    // Get fee for event
+    const amount = eventFees[event] || 100; // Default to 100 if not found
 
-    const registration = await Registration.create({
-      ...req.body,
-      paymentScreenshot: req.file ? req.file.path : null
-    });
+    const options = {
+      amount: amount * 100, // Convert to smallest currency unit (paise)
+      currency: "INR",
+      receipt: `receipt_${rollnumber}_${Date.now()}`,
+      notes: {
+        email,
+        name,
+        rollnumber,
+        event,
+      },
+    };
 
-
-
-    // 2️⃣ Send confirmation email
-    await sendConfirmationEmail(registration.email, registration.name, registration.event);
+    const order = await razorpay.orders.create(options);
 
     res.status(201).json({
       success: true,
-      data: registration,
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      eventFee: amount
     });
   } catch (error) {
-    console.error("ERROR:", error);
-
+    console.error("Order creation error:", error);
     res.status(400).json({
       success: false,
       message: error.message,
@@ -31,6 +59,71 @@ export const createRegistration = async (req, res) => {
   }
 };
 
+// POST /api/verify-payment
+export const verifyPayment = async (req, res) => {
+  try {
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      name,
+      email,
+      college,
+      rollnumber,
+      contactnumber,
+      whatsappnumber,
+      year,
+      department,
+      event,
+    } = req.body;
+
+    // Verify signature
+    const sign = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(sign)
+      .digest("hex");
+
+    if (expectedSignature !== razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment verification failed",
+      });
+    }
+
+    // Create registration with payment details
+    const registration = await Registration.create({
+      name,
+      email,
+      college,
+      rollnumber,
+      contactnumber,
+      whatsappnumber,
+      year,
+      department,
+      event,
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      paymentStatus: 'completed'
+    });
+
+    // Send confirmation email
+    await sendConfirmationEmail(registration.email, registration.name, registration.event);
+
+    res.status(201).json({
+      success: true,
+      data: registration,
+      message: "Registration successful! Confirmation email sent.",
+    });
+  } catch (error) {
+    console.error("Payment verification error:", error);
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 
 // GET /api/register
 export const getRegistrations = async (req, res) => {
@@ -47,5 +140,152 @@ export const getRegistrations = async (req, res) => {
       success: false,
       message: error.message || "Failed to fetch registrations",
     });
+  }
+};
+
+// POST /api/permission-letter-pdf
+export const getPermissionLetterPDF = async (req, res) => {
+  try {
+    const { rollnumber, event } = req.body;
+    if (!rollnumber || !event) {
+      return res.status(400).json({ success: false, message: 'Roll number and event are required.' });
+    }
+    if (typeof rollnumber !== 'string' || typeof event !== 'string') {
+      return res.status(400).json({ success: false, message: 'Invalid input type.' });
+    }
+    const registration = await Registration.findOne({ rollnumber: rollnumber.trim(), event: event.trim() });
+    if (!registration) {
+      return res.status(404).json({ success: false, message: 'No registration found for this roll number and event.' });
+    }
+
+    // Create QR code data
+    const qrData = JSON.stringify({
+      rollnumber: registration.rollnumber,
+      name: registration.name,
+      event: registration.event,
+      college: registration.college,
+      department: registration.department,
+      year: registration.year,
+      timestamp: new Date().toISOString()
+    });
+
+    // Generate QR code image
+    const qrImage = await QRCode.toDataURL(qrData, { width: 200 });
+
+    // Create PDF document with wider margins to accommodate content
+    const doc = new PDFDocument({
+      margins: { top: 50, left: 60, right: 60, bottom: 100 },
+      size: 'A4'
+    });
+
+    // Set response headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="permission_letter_${registration.rollnumber}_${registration.event.replace(/\s+/g, '_')}.pdf"`);
+
+    // Pipe PDF to response
+    doc.pipe(res);
+
+    // Add heading centered
+    doc.fontSize(18).font('Helvetica-Bold').text('ECLECTICA-2K26', { align: 'center' });
+    doc.fontSize(14).font('Helvetica-Bold').text('Permission Letter', { align: 'center' });
+    doc.moveDown(0.5);
+
+    // Add constant date at top right
+    doc.fontSize(10).font('Helvetica').text('April 1, 2026', { align: 'right' });
+    doc.moveDown(1);
+
+    // Add letter body with proper format
+    doc.fontSize(11).font('Helvetica-Bold').text('From:', { align: 'left' });
+    doc.fontSize(10).font('Helvetica').text('The Coordinators', { align: 'left' });
+    doc.fontSize(10).text('ECLECTICA 2K26', { align: 'left' });
+    doc.fontSize(10).text('Department of Electronics and Communication Engineering', { align: 'left' });
+    doc.fontSize(10).text('MITS Deemed to be University', { align: 'left' });
+    doc.fontSize(10).text('Madanapalle', { align: 'left' });
+    doc.moveDown(0.8);
+
+    doc.fontSize(11).font('Helvetica-Bold').text('To:', { align: 'left' });
+    doc.fontSize(10).font('Helvetica').text('The Head of the Department', { align: 'left' });
+    doc.fontSize(10).text('Department of ' + (registration.department || '_______________'), { align: 'left' });
+    doc.fontSize(10).text(registration.college, { align: 'left' });
+    doc.moveDown(0.8);
+
+    doc.fontSize(11).font('Helvetica-Bold').text('Subject: Request for Permission to Participate in ECLECTICA 2K26', { align: 'left' });
+    doc.moveDown(0.8);
+
+    doc.fontSize(11).font('Helvetica').text('Respected Sir/Madam,', { align: 'left' });
+    doc.moveDown(0.8);
+
+    doc.fontSize(10).font('Helvetica').text(
+      'We extend our greetings from the Department of Electronics and Communication Engineering, MITS Deemed to be University.',
+      { align: 'justify' }
+    );
+    doc.moveDown(0.5);
+
+    doc.fontSize(10).text(
+      `This is to inform you that ${registration.name} (${registration.rollnumber}), a student of your esteemed institution, has registered for the event ${registration.event} to be conducted as part of ECLECTICA 2K26, our departmental technical symposium.`,
+      { align: 'justify' }
+    );
+    doc.moveDown(0.5);
+
+    doc.fontSize(10).text(
+      'In this regard, we kindly request you to grant  permission to participate in the above-mentioned event. We assure you that the program will be conducted in a well-organized and disciplined manner. Participation in this event will provide valuable technical exposure and contribute to the  academic and professional development.',
+      { align: 'justify' }
+    );
+    doc.moveDown(0.5);
+
+    doc.fontSize(10).text(
+      'We shall be grateful for your kind consideration and approval.',
+      { align: 'justify' }
+    );
+    doc.moveDown(0.8);
+
+    doc.fontSize(10).text('Thanking you.', { align: 'left' });
+    doc.moveDown(0.8);
+
+    doc.fontSize(10).text('Yours sincerely,', { align: 'left' });
+    doc.moveDown(1.5);
+
+    doc.fontSize(10).font('Helvetica').text('The Coordinators', { align: 'left' });
+    doc.fontSize(10).text('ECLECTICA 2K26', { align: 'left' });
+    doc.fontSize(10).text('Department of ECE', { align: 'left' });
+    doc.fontSize(10).text('MITS Deemed to be University', { align: 'left' });
+    doc.fontSize(10).text('Madanapalle', { align: 'left' });
+
+    // Add QR code at bottom left
+    const qrImageBuffer = Buffer.from(qrImage.split(',')[1], 'base64');
+    doc.image(qrImageBuffer, 60, 600, { width: 90, height: 90 });
+
+    // Add text below QR code
+    doc.fontSize(8).font('Helvetica').text('Scan this QR code to verify the student\'s registration details.', 60, 700, { width: 90, align: 'center' });
+  
+
+    // Add signature at bottom right
+    doc.fontSize(10).font('Helvetica').text('Head of the Department', 380, 550, { width: 150, align: 'center' });
+    doc.fontSize(10).text('Department of ' + (registration.department || '_______________'), 380, 560, { width: 150, align: 'center' });
+
+    // Finalize PDF
+    doc.end();
+  } catch (error) {
+    console.error("Permission letter PDF error:", error);
+    res.status(500).json({ success: false, message: 'Server error. Please try again later.' });
+  }
+};
+
+// POST /api/registered-events
+export const getRegisteredEvents = async (req, res) => {
+  try {
+    const { rollnumber } = req.body;
+    if (!rollnumber || typeof rollnumber !== 'string') {
+      return res.status(400).json({ success: false, message: 'Roll number is required.' });
+    }
+    const registrations = await Registration.find({ rollnumber: rollnumber.trim() });
+    if (!registrations.length) {
+      return res.status(404).json({ success: false, message: 'No registrations found for this roll number.' });
+    }
+    const events = registrations.map(r => r.event);
+    res.json({ success: true, events });
+  } catch (error) {
+    console.error("Registered events error:", error);
+    res.status(500).json({ success: false, message: 'Server error. Please try again later.' });
   }
 };

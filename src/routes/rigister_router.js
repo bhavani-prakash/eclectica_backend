@@ -1,11 +1,20 @@
 import express from "express";
-import upload from "../utils/multer.js";
 import {
-  createRegistration,
+  createOrder,
+  verifyPayment,
+  getRegistrations,
+  getPermissionLetterPDF,
+  getRegisteredEvents
 } from "../controllers/registration_controllers.js";
 
 const router = express.Router();
 
-router.post("/register",upload.single("paymentScreenshot"), createRegistration);
+
+
+router.post("/create-order", createOrder);
+router.post("/verify-payment", verifyPayment);
+router.get("/register", getRegistrations);
+router.post("/permission-letter-pdf", getPermissionLetterPDF);
+router.post("/registered-events", getRegisteredEvents);
 
 export default router;

@@ -11,8 +11,10 @@ const registrationSchema = new mongoose.Schema(
     year: { type: String, required: true },
     department: { type: String, required: true },
     event: { type: String, required: true },
-    utrnumber: { type: String, required: true },
-    paymentScreenshot:{type: String , required: true}
+    razorpay_order_id: { type: String, required: true },
+    razorpay_payment_id: { type: String, required: true },
+    razorpay_signature: { type: String, required: true },
+    paymentStatus: { type: String, enum: ['pending', 'completed', 'failed'], default: 'completed' }
   },
   { timestamps: true }
 );
