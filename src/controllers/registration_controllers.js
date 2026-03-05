@@ -12,14 +12,11 @@ const razorpay = new Razorpay({
 
 // Event fee mapping
 const eventFees = {
-  'Paper Presentation': 150,
-  'Tech Quiz': 100,
-  'Project Expo': 200,
-  'Circuit Debugging': 120,
-  'Photography': 80,
-  'Gaming': 100,
-  'Treasure Hunt': 90,
-  'Debate': 70
+  'Paper Presentation': 70,
+  'Tech Quiz': 70,
+  'Circuit Detective': 70,
+  'Bug Hunters': 70,
+  'Poster Presentation': 70
 };
 
 // POST /api/create-order
