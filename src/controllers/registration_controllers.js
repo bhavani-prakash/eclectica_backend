@@ -152,7 +152,7 @@ export const getPermissionLetterPDF = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid input type.' });
     }
     
-    const registration = await Registration.findOne({ rollnumber: rollnumber.trim(), event: event.trim() });
+    const registration = await Registration.findOne({ rollnumber: { $regex: rollnumber.trim(), $options: 'i' }, event: event.trim() });
     if (!registration) {
       return res.status(404).json({ success: false, message: 'No registration found for this roll number and event.' });
     }
@@ -317,7 +317,7 @@ export const getRegisteredEvents = async (req, res) => {
     if (!rollnumber || typeof rollnumber !== 'string') {
       return res.status(400).json({ success: false, message: 'Roll number is required.' });
     }
-    const registrations = await Registration.find({ rollnumber: rollnumber.trim() });
+    const registrations = await Registration.find({ rollnumber: { $regex: rollnumber.trim(), $options: 'i' } });
     if (!registrations.length) {
       return res.status(404).json({ success: false, message: 'No registrations found for this roll number.' });
     }
