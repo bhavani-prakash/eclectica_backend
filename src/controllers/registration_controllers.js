@@ -4,6 +4,11 @@ import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -16,7 +21,14 @@ const eventFees = {
   'Tech Quiz': 70,
   'Circuit Detective': 70,
   'Bug Hunters': 70,
-  'Poster Presentation': 70
+  'Poster Presentation': 70,
+  'Free Fire': 200,
+  'BGMI': 200,
+  'Strength Storm': 50,
+  'Balloon Sprint': 50,
+  'Rope Rumble': 50,
+  'Ball Heist': 50
+
 };
 
 // POST /api/create-order
@@ -24,7 +36,7 @@ export const createOrder = async (req, res) => {
   try {
     const { email, name, rollnumber, event } = req.body;
     // Get fee for event
-    const amount = eventFees[event] || 100; // Default to 100 if not found
+    const amount = eventFees[event] || 70; // Default to 70 if not found
 
     const options = {
       amount: amount * 100, // Convert to smallest currency unit (paise)
@@ -105,13 +117,17 @@ export const verifyPayment = async (req, res) => {
       paymentStatus: 'completed'
     });
 
-    // Send confirmation email
-    await sendConfirmationEmail(registration.email, registration.name, registration.event);
+    // Send confirmation email asynchronously (don't block registration completion)
+    sendConfirmationEmail(registration.email, registration.name, registration.event)
+      .catch((error) => {
+        console.error("Email sending failed for user:", registration.email, error);
+        // Log the error but don't fail the registration
+      });
 
     res.status(201).json({
       success: true,
       data: registration,
-      message: "Registration successful! Confirmation email sent.",
+      message: "Registration successful! Confirmation email will be sent shortly.",
     });
   } catch (error) {
     console.error("Payment verification error:", error);
@@ -151,7 +167,7 @@ export const getPermissionLetterPDF = async (req, res) => {
     if (typeof rollnumber !== 'string' || typeof event !== 'string') {
       return res.status(400).json({ success: false, message: 'Invalid input type.' });
     }
-    
+
     const registration = await Registration.findOne({ rollnumber: { $regex: rollnumber.trim(), $options: 'i' }, event: event.trim() });
     if (!registration) {
       return res.status(404).json({ success: false, message: 'No registration found for this roll number and event.' });
@@ -208,6 +224,25 @@ export const getPermissionLetterPDF = async (req, res) => {
 
     // Pipe PDF to response
     doc.pipe(res);
+
+    // Add watermark logo
+    try {
+      const logoPath = path.join(__dirname, '../assets/Eclectica-logo-nobg.png');
+      console.log("Adding watermark from:", logoPath);
+
+      // Place watermark in center with visible opacity
+      const logoSize = 400;
+      const xPos = (595 - logoSize) / 2; // Center on A4 width
+      const yPos = (842 - logoSize) / 2 - 100; // Center on A4 height, slightly higher
+
+      doc.opacity(0.25); // 25% opacity - more visible
+      doc.image(logoPath, xPos, yPos, { width: logoSize, height: logoSize });
+      doc.opacity(1); // Reset to full opacity for text
+
+      console.log("Watermark positioned at:", xPos, yPos);
+    } catch (logoError) {
+      console.error("Watermark error:", logoError.message);
+    }
 
     // Add heading centered
     doc.fontSize(18).font('Helvetica-Bold').text('ECLECTICA-2K26', { align: 'center' });
@@ -286,7 +321,7 @@ export const getPermissionLetterPDF = async (req, res) => {
 
     // Add text below QR code
     doc.fontSize(8).font('Helvetica').text('Scan this QR code to verify the student\'s registration details.', 60, 700, { width: 90, align: 'center' });
-    
+
 
     // Add signature at bottom right
     doc.fontSize(10).font('Helvetica').text('Head of the Department', 380, 550, { width: 150, align: 'center' });
