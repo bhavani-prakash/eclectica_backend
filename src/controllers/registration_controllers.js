@@ -24,8 +24,8 @@ const eventFees = {
   'Poster Presentation': 70,
   'Free Fire': 200,
   'BGMI': 200,
-  'Strength Storm': 50,
-  'Balloon Sprint': 50,
+  'cineQuest': 50,
+  'Balloon Spirit': 50,
   'Rope Rumble': 50,
   'Ball Heist': 50
 
@@ -35,8 +35,20 @@ const eventFees = {
 export const createOrder = async (req, res) => {
   try {
     const { email, name, rollnumber, event } = req.body;
+    
+    // Validate required fields
+    if (!email || !name || !rollnumber || !event) {
+      console.warn('Missing required fields:', { email, name, rollnumber, event });
+      return res.status(400).json({
+        success: false,
+        message: `Missing required fields: ${!email ? 'email ' : ''}${!name ? 'name ' : ''}${!rollnumber ? 'rollnumber ' : ''}${!event ? 'event' : ''}`,
+      });
+    }
+
     // Get fee for event
     const amount = eventFees[event] || 70; // Default to 70 if not found
+    
+    console.log('📝 Creating Razorpay order for:', { email, name, rollnumber, event, amount });
 
     const options = {
       amount: amount * 100, // Convert to smallest currency unit (paise)
@@ -51,6 +63,7 @@ export const createOrder = async (req, res) => {
     };
 
     const order = await razorpay.orders.create(options);
+    console.log('✅ Razorpay order created:', order.id);
 
     res.status(201).json({
       success: true,
@@ -60,10 +73,13 @@ export const createOrder = async (req, res) => {
       eventFee: amount
     });
   } catch (error) {
-    console.error("Order creation error:", error);
+    console.error("❌ Order creation error:", error.message);
+    console.error("Error details:", error.response?.data || error);
+    
     res.status(400).json({
       success: false,
       message: error.message,
+      details: error.response?.data?.error?.description || 'Please check your Razorpay credentials',
     });
   }
 };
