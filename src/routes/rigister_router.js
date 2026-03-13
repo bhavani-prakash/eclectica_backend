@@ -4,8 +4,10 @@ import {
   verifyPayment,
   getRegistrations,
   getPermissionLetterPDF,
-  getRegisteredEvents
+  getRegisteredEvents,
+  manualRegistration
 } from "../controllers/registration_controllers.js";
+import { upload } from "../utils/multer.js";
 
 const router = express.Router();
 
@@ -17,6 +19,7 @@ router.use((req, res, next) => {
 
 router.post("/create-order", createOrder);
 router.post("/verify-payment", verifyPayment);
+router.post("/manual-registration", upload.single('screenshot'), manualRegistration);
 router.get("/register", getRegistrations);
 router.post("/permission-letter-pdf", getPermissionLetterPDF);
 router.post("/registered-events", getRegisteredEvents);

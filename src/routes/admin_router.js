@@ -8,6 +8,6 @@ const router = express.Router();
 router.post('/login', adminLogin);
 
 // GET /admin/dashboard
-router.get('/dashboard',adminDashboard);
+router.get('/dashboard', adminDashboard);
 
 export default router;

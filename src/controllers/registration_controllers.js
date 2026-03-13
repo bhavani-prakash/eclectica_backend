@@ -379,3 +379,78 @@ export const getRegisteredEvents = async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error. Please try again later.' });
   }
 };
+
+// POST /api/manual-registration (For Free Fire & BGMI with screenshot upload)
+export const manualRegistration = async (req, res) => {
+  try {
+    const {
+      name,
+      email,
+      college,
+      rollnumber,
+      contactnumber,
+      whatsappnumber,
+      year,
+      department,
+      event,
+      paymentStatus
+    } = req.body;
+
+    // Validate required fields
+    if (!name || !email || !college || !rollnumber || !contactnumber || 
+        !whatsappnumber || !year || !department || !event) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields'
+      });
+    }
+
+    // Check if screenshot was uploaded
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Payment screenshot is required'
+      });
+    }
+
+    console.log('📝 Registering user for manual payment event:', { name, event, rollnumber });
+
+    // Create registration with pending payment status
+    const registration = await Registration.create({
+      name,
+      email,
+      college,
+      rollnumber,
+      contactnumber,
+      whatsappnumber,
+      year,
+      department,
+      event,
+      razorpay_order_id: `MANUAL_${rollnumber}_${Date.now()}`, // Pseudo order ID
+      razorpay_payment_id: `SCREENSHOT_${rollnumber}_${Date.now()}`, // Screenshot reference
+      razorpay_signature: req.file.filename, // Store screenshot filename
+      paymentStatus: paymentStatus || 'pending' // 'pending' until admin verifies
+    });
+
+    console.log('✅ Manual registration created:', registration._id);
+
+    // Send verification email to user
+    sendConfirmationEmail(registration.email, registration.name, registration.event)
+      .catch((error) => {
+        console.error("Email sending failed for user:", registration.email, error);
+      });
+
+    res.status(201).json({
+      success: true,
+      data: registration,
+      message: 'Registration submitted successfully! Your payment screenshot is being verified. You will receive confirmation email once verified.'
+    });
+
+  } catch (error) {
+    console.error("Manual registration error:", error);
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Error creating registration'
+    });
+  }
+};
