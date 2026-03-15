@@ -433,7 +433,7 @@ export const manualRegistration = async (req, res) => {
       event,
       razorpay_order_id: `MANUAL_${rollnumber}_${Date.now()}`, // Pseudo order ID
       razorpay_payment_id: `SCREENSHOT_${rollnumber}_${Date.now()}`, // Screenshot reference
-      razorpay_signature: req.file.filename, // Store screenshot filename
+      razorpay_signature: req.file.path || req.file.filename, // Store full Cloudinary URL or filename
       paymentStatus: paymentStatus || 'pending', // 'pending' until admin verifies
       paymentAmount: parseFloat(paymentAmount) || 0 // Store payment amount
     });
