@@ -14,7 +14,8 @@ const registrationSchema = new mongoose.Schema(
     razorpay_order_id: { type: String, required: true },
     razorpay_payment_id: { type: String, required: true },
     razorpay_signature: { type: String, required: true },
-    paymentStatus: { type: String, enum: ['pending', 'completed', 'failed'], default: 'completed' }
+    paymentStatus: { type: String, enum: ['pending', 'completed', 'failed', 'success'], default: 'completed' },
+    paymentAmount: { type: Number, default: 0 } // Amount received
   },
   { timestamps: true }
 );

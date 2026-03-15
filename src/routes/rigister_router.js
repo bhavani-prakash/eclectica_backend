@@ -1,7 +1,8 @@
 import express from "express";
 import {
-  createOrder,
-  verifyPayment,
+  // 🔴 RAZORPAY DISABLED
+  // createOrder,
+  // verifyPayment,
   getRegistrations,
   getPermissionLetterPDF,
   getRegisteredEvents,
@@ -17,8 +18,9 @@ router.use((req, res, next) => {
   next();
 });
 
-router.post("/create-order", createOrder);
-router.post("/verify-payment", verifyPayment);
+// 🔴 RAZORPAY DISABLED - Using manual payment only
+// router.post("/create-order", createOrder);
+// router.post("/verify-payment", verifyPayment);
 router.post("/manual-registration", upload.single('screenshot'), manualRegistration);
 router.get("/register", getRegistrations);
 router.post("/permission-letter-pdf", getPermissionLetterPDF);

@@ -1,6 +1,7 @@
 import Registration from "../models/registration_model.js";
 import { sendConfirmationEmail } from '../utils/sendMail.js';
-import Razorpay from 'razorpay';
+// 🔴 RAZORPAY DISABLED - Using manual payment only
+// import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
@@ -10,10 +11,11 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+// 🔴 RAZORPAY DISABLED - Removed Razorpay initialization
+// const razorpay = new Razorpay({
+//   key_id: process.env.RAZORPAY_KEY_ID,
+//   key_secret: process.env.RAZORPAY_KEY_SECRET,
+// });
 
 // Event fee mapping
 const eventFees = {
@@ -31,128 +33,130 @@ const eventFees = {
 
 };
 
+// 🔴 RAZORPAY DISABLED - Removed create-order endpoint
 // POST /api/create-order
-export const createOrder = async (req, res) => {
-  try {
-    const { email, name, rollnumber, event } = req.body;
-    
-    // Validate required fields
-    if (!email || !name || !rollnumber || !event) {
-      console.warn('Missing required fields:', { email, name, rollnumber, event });
-      return res.status(400).json({
-        success: false,
-        message: `Missing required fields: ${!email ? 'email ' : ''}${!name ? 'name ' : ''}${!rollnumber ? 'rollnumber ' : ''}${!event ? 'event' : ''}`,
-      });
-    }
+// export const createOrder = async (req, res) => {
+//   try {
+//     const { email, name, rollnumber, event } = req.body;
+//     
+//     // Validate required fields
+//     if (!email || !name || !rollnumber || !event) {
+//       console.warn('Missing required fields:', { email, name, rollnumber, event });
+//       return res.status(400).json({
+//         success: false,
+//         message: `Missing required fields: ${!email ? 'email ' : ''}${!name ? 'name ' : ''}${!rollnumber ? 'rollnumber ' : ''}${!event ? 'event' : ''}`,
+//       });
+//     }
+//
+//     // Get fee for event
+//     const amount = eventFees[event] || 70; // Default to 70 if not found
+//     
+//     console.log('📝 Creating Razorpay order for:', { email, name, rollnumber, event, amount });
+//
+//     const options = {
+//       amount: amount * 100, // Convert to smallest currency unit (paise)
+//       currency: "INR",
+//       receipt: `receipt_${rollnumber}_${Date.now()}`,
+//       notes: {
+//         email,
+//         name,
+//         rollnumber,
+//         event,
+//       },
+//     };
+//
+//     const order = await razorpay.orders.create(options);
+//     console.log('✅ Razorpay order created:', order.id);
+//
+//     res.status(201).json({
+//       success: true,
+//       orderId: order.id,
+//       amount: order.amount,
+//       currency: order.currency,
+//       eventFee: amount
+//     });
+//   } catch (error) {
+//     console.error("❌ Order creation error:", error.message);
+//     console.error("Error details:", error.response?.data || error);
+//     
+//     res.status(400).json({
+//       success: false,
+//       message: error.message,
+//       details: error.response?.data?.error?.description || 'Please check your Razorpay credentials',
+//     });
+//   }
+// };
 
-    // Get fee for event
-    const amount = eventFees[event] || 70; // Default to 70 if not found
-    
-    console.log('📝 Creating Razorpay order for:', { email, name, rollnumber, event, amount });
-
-    const options = {
-      amount: amount * 100, // Convert to smallest currency unit (paise)
-      currency: "INR",
-      receipt: `receipt_${rollnumber}_${Date.now()}`,
-      notes: {
-        email,
-        name,
-        rollnumber,
-        event,
-      },
-    };
-
-    const order = await razorpay.orders.create(options);
-    console.log('✅ Razorpay order created:', order.id);
-
-    res.status(201).json({
-      success: true,
-      orderId: order.id,
-      amount: order.amount,
-      currency: order.currency,
-      eventFee: amount
-    });
-  } catch (error) {
-    console.error("❌ Order creation error:", error.message);
-    console.error("Error details:", error.response?.data || error);
-    
-    res.status(400).json({
-      success: false,
-      message: error.message,
-      details: error.response?.data?.error?.description || 'Please check your Razorpay credentials',
-    });
-  }
-};
-
+// 🔴 RAZORPAY DISABLED - Removed verify-payment endpoint
 // POST /api/verify-payment
-export const verifyPayment = async (req, res) => {
-  try {
-    const {
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
-      name,
-      email,
-      college,
-      rollnumber,
-      contactnumber,
-      whatsappnumber,
-      year,
-      department,
-      event,
-    } = req.body;
-
-    // Verify signature
-    const sign = razorpay_order_id + "|" + razorpay_payment_id;
-    const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(sign)
-      .digest("hex");
-
-    if (expectedSignature !== razorpay_signature) {
-      return res.status(400).json({
-        success: false,
-        message: "Payment verification failed",
-      });
-    }
-
-    // Create registration with payment details
-    const registration = await Registration.create({
-      name,
-      email,
-      college,
-      rollnumber,
-      contactnumber,
-      whatsappnumber,
-      year,
-      department,
-      event,
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
-      paymentStatus: 'completed'
-    });
-
-    // Send confirmation email asynchronously (don't block registration completion)
-    sendConfirmationEmail(registration.email, registration.name, registration.event)
-      .catch((error) => {
-        console.error("Email sending failed for user:", registration.email, error);
-        // Log the error but don't fail the registration
-      });
-
-    res.status(201).json({
-      success: true,
-      data: registration,
-      message: "Registration successful! Confirmation email will be sent shortly.",
-    });
-  } catch (error) {
-    console.error("Payment verification error:", error);
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
+// export const verifyPayment = async (req, res) => {
+//   try {
+//     const {
+//       razorpay_order_id,
+//       razorpay_payment_id,
+//       razorpay_signature,
+//       name,
+//       email,
+//       college,
+//       rollnumber,
+//       contactnumber,
+//       whatsappnumber,
+//       year,
+//       department,
+//       event,
+//     } = req.body;
+//
+//     // Verify signature
+//     const sign = razorpay_order_id + "|" + razorpay_payment_id;
+//     const expectedSignature = crypto
+//       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+//       .update(sign)
+//       .digest("hex");
+//
+//     if (expectedSignature !== razorpay_signature) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Payment verification failed",
+//       });
+//     }
+//
+//     // Create registration with payment details
+//     const registration = await Registration.create({
+//       name,
+//       email,
+//       college,
+//       rollnumber,
+//       contactnumber,
+//       whatsappnumber,
+//       year,
+//       department,
+//       event,
+//       razorpay_order_id,
+//       razorpay_payment_id,
+//       razorpay_signature,
+//       paymentStatus: 'completed'
+//     });
+//
+//     // Send confirmation email asynchronously (don't block registration completion)
+//     sendConfirmationEmail(registration.email, registration.name, registration.event)
+//       .catch((error) => {
+//         console.error("Email sending failed for user:", registration.email, error);
+//         // Log the error but don't fail the registration
+//       });
+//
+//     res.status(201).json({
+//       success: true,
+//       data: registration,
+//       message: "Registration successful! Confirmation email will be sent shortly.",
+//     });
+//   } catch (error) {
+//     console.error("Payment verification error:", error);
+//     res.status(400).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
 
 // GET /api/register
 export const getRegistrations = async (req, res) => {
@@ -393,7 +397,8 @@ export const manualRegistration = async (req, res) => {
       year,
       department,
       event,
-      paymentStatus
+      paymentStatus,
+      paymentAmount
     } = req.body;
 
     // Validate required fields
@@ -429,16 +434,27 @@ export const manualRegistration = async (req, res) => {
       razorpay_order_id: `MANUAL_${rollnumber}_${Date.now()}`, // Pseudo order ID
       razorpay_payment_id: `SCREENSHOT_${rollnumber}_${Date.now()}`, // Screenshot reference
       razorpay_signature: req.file.filename, // Store screenshot filename
-      paymentStatus: paymentStatus || 'pending' // 'pending' until admin verifies
+      paymentStatus: paymentStatus || 'pending', // 'pending' until admin verifies
+      paymentAmount: parseFloat(paymentAmount) || 0 // Store payment amount
     });
 
     console.log('✅ Manual registration created:', registration._id);
 
-    // Send verification email to user
-    sendConfirmationEmail(registration.email, registration.name, registration.event)
-      .catch((error) => {
-        console.error("Email sending failed for user:", registration.email, error);
-      });
+    // Send verification email to user (async, non-blocking)
+    sendConfirmationEmail(
+      registration.email, 
+      registration.name, 
+      registration.event,
+      registration // Pass registration data for failed email logging
+    ).then((result) => {
+      if (result.success) {
+        console.log('✅ Confirmation email sent successfully');
+      } else {
+        console.log('⚠️ Confirmation email failed - logged for admin review');
+      }
+    }).catch((error) => {
+      console.error("Unexpected error in email handler:", registration.email, error);
+    });
 
     res.status(201).json({
       success: true,
