@@ -387,6 +387,10 @@ export const getRegisteredEvents = async (req, res) => {
 // POST /api/manual-registration (For Free Fire & BGMI with screenshot upload)
 export const manualRegistration = async (req, res) => {
   try {
+    console.log('🔍 DEBUG: Full req received');
+    console.log('req.body:', JSON.stringify(req.body, null, 2));
+    console.log('req.file:', req.file ? { filename: req.file.filename, path: req.file.path } : 'No file');
+    
     const {
       name,
       email,
@@ -398,8 +402,11 @@ export const manualRegistration = async (req, res) => {
       department,
       event,
       paymentStatus,
-      paymentAmount
+      paymentAmount,
+      utrNumber
     } = req.body;
+    
+    console.log('✅ Extracted variables - utrNumber:', utrNumber, 'Type:', typeof utrNumber);
 
     // Validate required fields
     if (!name || !email || !college || !rollnumber || !contactnumber || 
@@ -419,6 +426,9 @@ export const manualRegistration = async (req, res) => {
     }
 
     console.log('📝 Registering user for manual payment event:', { name, event, rollnumber });
+    console.log('📦 Full request body:', JSON.stringify(req.body, null, 2));
+    console.log('🆔 UTR Number received:', utrNumber);
+    console.log('📄 File info:', req.file ? { filename: req.file.filename, path: req.file.path } : 'No file');
 
     // Create registration with pending payment status
     const registration = await Registration.create({
@@ -433,12 +443,17 @@ export const manualRegistration = async (req, res) => {
       event,
       razorpay_order_id: `MANUAL_${rollnumber}_${Date.now()}`, // Pseudo order ID
       razorpay_payment_id: `SCREENSHOT_${rollnumber}_${Date.now()}`, // Screenshot reference
-      razorpay_signature: req.file.path || req.file.filename, // Store full Cloudinary URL or filename
+      razorpay_signature: `MANUAL_PAYMENT_${rollnumber}`, // Manual payment signature identifier
+      imageUrl: req.file.path || req.file.filename, // Store full Cloudinary URL
+      utrNumber: utrNumber || null, // Store UTR number
       paymentStatus: paymentStatus || 'pending', // 'pending' until admin verifies
       paymentAmount: parseFloat(paymentAmount) || 0 // Store payment amount
     });
 
     console.log('✅ Manual registration created:', registration._id);
+    console.log('💾 Saved to DB - UTR Number:', registration.utrNumber);
+    console.log('💾 Saved to DB - Image URL:', registration.imageUrl);
+    console.log('📊 Full saved document:', JSON.stringify(registration, null, 2));
 
     // Send verification email to user (async, non-blocking)
     sendConfirmationEmail(

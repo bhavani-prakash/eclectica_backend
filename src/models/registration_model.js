@@ -15,7 +15,9 @@ const registrationSchema = new mongoose.Schema(
     razorpay_payment_id: { type: String, required: true },
     razorpay_signature: { type: String, required: true },
     paymentStatus: { type: String, enum: ['pending', 'completed', 'failed', 'success'], default: 'completed' },
-    paymentAmount: { type: Number, default: 0 } // Amount received
+    paymentAmount: { type: Number, default: 0 }, // Amount received
+    imageUrl: { type: String, default: null }, // Cloudinary URL for payment screenshot
+    utrNumber: { type: String, default: null } // UTR number for payment verification
   },
   { timestamps: true }
 );
