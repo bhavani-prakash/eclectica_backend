@@ -35,6 +35,27 @@ const eventFees = {
 
 };
 
+const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const normalizeStringField = (value) => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value.trim();
+};
+
+const resolveEventName = (eventValue) => {
+  const normalizedEvent = normalizeStringField(eventValue);
+  if (!normalizedEvent) {
+    return '';
+  }
+
+  const knownEvents = Object.keys(eventFees);
+  const matchedEvent = knownEvents.find((knownEvent) => knownEvent.toLowerCase() === normalizedEvent.toLowerCase());
+  return matchedEvent || '';
+};
+
 // 🔴 RAZORPAY DISABLED - Removed create-order endpoint
 // POST /api/create-order
 // export const createOrder = async (req, res) => {
@@ -389,33 +410,51 @@ export const getRegisteredEvents = async (req, res) => {
 // POST /api/manual-registration (Manual registration with conditional payment proof)
 export const manualRegistration = async (req, res) => {
   try {
-    const {
-      name,
-      email,
-      college,
-      rollnumber,
-      contactnumber,
-      whatsappnumber,
-      year,
-      department,
-      event,
-      paymentStatus,
-      paymentAmount,
-      utrNumber
-    } = req.body;
+    const name = normalizeStringField(req.body?.name);
+    const email = normalizeStringField(req.body?.email);
+    const college = normalizeStringField(req.body?.college);
+    const rollnumber = normalizeStringField(req.body?.rollnumber);
+    const contactnumber = normalizeStringField(req.body?.contactnumber);
+    const whatsappnumber = normalizeStringField(req.body?.whatsappnumber);
+    const year = normalizeStringField(req.body?.year);
+    const department = normalizeStringField(req.body?.department);
+    const rawEvent = normalizeStringField(req.body?.event);
+    const event = resolveEventName(rawEvent);
+    const normalizedUtrNumber = normalizeStringField(req.body?.utrNumber);
 
     const isDebateEvent = event === 'Debate';
-    const normalizedUtrNumber = typeof utrNumber === 'string' ? utrNumber.trim() : '';
     const resolvedPaymentAmount = Object.prototype.hasOwnProperty.call(eventFees, event)
       ? eventFees[event]
-      : (parseFloat(paymentAmount) || 0);
+      : 0;
 
     // Validate required fields
     if (!name || !email || !college || !rollnumber || !contactnumber || 
-        !whatsappnumber || !year || !department || !event) {
+        !whatsappnumber || !year || !department || !rawEvent) {
       return res.status(400).json({
         success: false,
         message: 'Missing required fields'
+      });
+    }
+
+    if (!event || !Object.prototype.hasOwnProperty.call(eventFees, event)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid event selected'
+      });
+    }
+
+    // Prevent duplicate registrations for the same participant and event.
+    // This also keeps frontend retry logic idempotent on flaky mobile networks.
+    const existingRegistration = await Registration.findOne({
+      rollnumber: { $regex: `^${escapeRegex(rollnumber)}$`, $options: 'i' },
+      event
+    });
+
+    if (existingRegistration) {
+      return res.status(200).json({
+        success: true,
+        data: existingRegistration,
+        message: 'You are already registered for this event.'
       });
     }
 
@@ -456,7 +495,7 @@ export const manualRegistration = async (req, res) => {
         : `MANUAL_PAYMENT_${rollnumber}`,
       imageUrl: isDebateEvent ? null : (req.file?.path || req.file?.filename),
       utrNumber: isDebateEvent ? null : normalizedUtrNumber,
-      paymentStatus: isDebateEvent ? 'success' : (paymentStatus || 'pending'),
+      paymentStatus: isDebateEvent ? 'success' : 'pending',
       paymentAmount: resolvedPaymentAmount
     });
 
@@ -488,7 +527,9 @@ export const manualRegistration = async (req, res) => {
 
   } catch (error) {
     console.error("Manual registration error:", error);
-    res.status(400).json({
+    const statusCode = error?.name === 'ValidationError' ? 400 : 500;
+
+    res.status(statusCode).json({
       success: false,
       message: error.message || 'Error creating registration'
     });

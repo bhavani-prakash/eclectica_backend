@@ -2,6 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
+import multer from "multer";
 import registrationRouter from "./src/routes/rigister_router.js"; // ✅ FIXED
 import adminRoutes from './src/routes/admin_router.js'; // ✅ FIXED
 
@@ -59,6 +60,28 @@ app.get("/test", (req, res) => {
 // Global error handler - ensure errors are returned as JSON (helps frontend)
 app.use((err, req, res, next) => {
   console.error('Global error handler:', err);
+
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        message: 'Screenshot is too large. Please upload an image smaller than 12 MB.'
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: err.message || 'Invalid upload. Please upload a supported image file.'
+    });
+  }
+
+  if (typeof err?.message === 'string' && err.message.includes('Image file format')) {
+    return res.status(400).json({
+      success: false,
+      message: 'Unsupported image format. Please upload JPG, PNG, WEBP, HEIC, or HEIF image.'
+    });
+  }
+
   const status = err.status || 500;
   res.status(status).json({
     success: false,
@@ -68,7 +91,7 @@ app.use((err, req, res, next) => {
   });
 });
 // MONGODB CONNECTION + SERVER START
-const PORT = 5000;
+const PORT = Number(process.env.PORT) || 5000;
 
 mongoose
   .connect(process.env.MONGO_URI)
