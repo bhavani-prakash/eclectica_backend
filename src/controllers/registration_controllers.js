@@ -24,6 +24,8 @@ const eventFees = {
   'Circuit Detective': 70,
   'Bug Hunters': 70,
   'Poster Presentation': 70,
+  'Project Expo': 100,
+  'Debate': 0,
   'Free Fire': 200,
   'BGMI': 200,
   'cineQuest': 50,
@@ -384,13 +386,9 @@ export const getRegisteredEvents = async (req, res) => {
   }
 };
 
-// POST /api/manual-registration (For Free Fire & BGMI with screenshot upload)
+// POST /api/manual-registration (Manual registration with conditional payment proof)
 export const manualRegistration = async (req, res) => {
   try {
-    console.log('🔍 DEBUG: Full req received');
-    console.log('req.body:', JSON.stringify(req.body, null, 2));
-    console.log('req.file:', req.file ? { filename: req.file.filename, path: req.file.path } : 'No file');
-    
     const {
       name,
       email,
@@ -405,8 +403,12 @@ export const manualRegistration = async (req, res) => {
       paymentAmount,
       utrNumber
     } = req.body;
-    
-    console.log('✅ Extracted variables - utrNumber:', utrNumber, 'Type:', typeof utrNumber);
+
+    const isDebateEvent = event === 'Debate';
+    const normalizedUtrNumber = typeof utrNumber === 'string' ? utrNumber.trim() : '';
+    const resolvedPaymentAmount = Object.prototype.hasOwnProperty.call(eventFees, event)
+      ? eventFees[event]
+      : (parseFloat(paymentAmount) || 0);
 
     // Validate required fields
     if (!name || !email || !college || !rollnumber || !contactnumber || 
@@ -417,20 +419,24 @@ export const manualRegistration = async (req, res) => {
       });
     }
 
-    // Check if screenshot was uploaded
-    if (!req.file) {
+    // Payment proof is required only for paid events
+    if (!isDebateEvent && !req.file) {
       return res.status(400).json({
         success: false,
         message: 'Payment screenshot is required'
       });
     }
 
-    console.log('📝 Registering user for manual payment event:', { name, event, rollnumber });
-    console.log('📦 Full request body:', JSON.stringify(req.body, null, 2));
-    console.log('🆔 UTR Number received:', utrNumber);
-    console.log('📄 File info:', req.file ? { filename: req.file.filename, path: req.file.path } : 'No file');
+    if (!isDebateEvent && !normalizedUtrNumber) {
+      return res.status(400).json({
+        success: false,
+        message: 'UTR number is required'
+      });
+    }
 
-    // Create registration with pending payment status
+    console.log('📝 Registering user for manual payment event:', { name, event, rollnumber });
+
+    // Create registration with event-aware payment fields
     const registration = await Registration.create({
       name,
       email,
@@ -442,18 +448,19 @@ export const manualRegistration = async (req, res) => {
       department,
       event,
       razorpay_order_id: `MANUAL_${rollnumber}_${Date.now()}`, // Pseudo order ID
-      razorpay_payment_id: `SCREENSHOT_${rollnumber}_${Date.now()}`, // Screenshot reference
-      razorpay_signature: `MANUAL_PAYMENT_${rollnumber}`, // Manual payment signature identifier
-      imageUrl: req.file.path || req.file.filename, // Store full Cloudinary URL
-      utrNumber: utrNumber || null, // Store UTR number
-      paymentStatus: paymentStatus || 'pending', // 'pending' until admin verifies
-      paymentAmount: parseFloat(paymentAmount) || 0 // Store payment amount
+      razorpay_payment_id: isDebateEvent
+        ? `FREE_${rollnumber}_${Date.now()}`
+        : `SCREENSHOT_${rollnumber}_${Date.now()}`,
+      razorpay_signature: isDebateEvent
+        ? `FREE_EVENT_${rollnumber}`
+        : `MANUAL_PAYMENT_${rollnumber}`,
+      imageUrl: isDebateEvent ? null : (req.file?.path || req.file?.filename),
+      utrNumber: isDebateEvent ? null : normalizedUtrNumber,
+      paymentStatus: isDebateEvent ? 'success' : (paymentStatus || 'pending'),
+      paymentAmount: resolvedPaymentAmount
     });
 
     console.log('✅ Manual registration created:', registration._id);
-    console.log('💾 Saved to DB - UTR Number:', registration.utrNumber);
-    console.log('💾 Saved to DB - Image URL:', registration.imageUrl);
-    console.log('📊 Full saved document:', JSON.stringify(registration, null, 2));
 
     // Send verification email to user (async, non-blocking)
     sendConfirmationEmail(
@@ -474,7 +481,9 @@ export const manualRegistration = async (req, res) => {
     res.status(201).json({
       success: true,
       data: registration,
-      message: 'Registration submitted successfully! Your payment screenshot is being verified. You will receive confirmation email once verified.'
+      message: isDebateEvent
+        ? 'Registration submitted successfully! Debate is free and no payment verification is needed.'
+        : 'Registration submitted successfully! Your payment screenshot is being verified. You will receive confirmation email once verified.'
     });
 
   } catch (error) {
