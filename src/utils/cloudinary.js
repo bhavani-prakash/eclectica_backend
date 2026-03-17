@@ -4,20 +4,28 @@ import dotenv from "dotenv";
 dotenv.config();
 
 // sanitize env vars (trim and remove trailing semicolons that sometimes appear)
-const cloudName = (process.env.CLOUD_NAME || "").trim().replace(/;+$/g, "");
-const apiKey = (process.env.CLOUD_API_KEY || "").trim().replace(/;+$/g, "");
-const apiSecret = (process.env.CLOUD_API_SECRET || "").trim().replace(/;+$/g, "");
+const sanitize = (value = "") => String(value).trim().replace(/;+$/g, "");
 
-if (!cloudName || !apiKey || !apiSecret) {
-  console.error("Cloudinary configuration missing. Please set CLOUD_NAME, CLOUD_API_KEY, CLOUD_API_SECRET in your .env");
-  // throw to fail fast during startup with a clear message
-  throw new Error("Missing Cloudinary credentials (CLOUD_NAME/CLOUD_API_KEY/CLOUD_API_SECRET)");
+// Support both CLOUD_* and CLOUDINARY_* variable names to avoid deployment mismatches.
+const cloudName = sanitize(process.env.CLOUD_NAME || process.env.CLOUDINARY_NAME);
+const apiKey = sanitize(process.env.CLOUD_API_KEY || process.env.CLOUDINARY_API_KEY);
+const apiSecret = sanitize(process.env.CLOUD_API_SECRET || process.env.CLOUDINARY_API_SECRET);
+const isCloudinaryConfigured = Boolean(cloudName && apiKey && apiSecret);
+
+if (!isCloudinaryConfigured) {
+  console.warn(
+    "Cloudinary configuration missing. Falling back to local upload storage. " +
+      "Set CLOUD_NAME/CLOUD_API_KEY/CLOUD_API_SECRET or CLOUDINARY_NAME/CLOUDINARY_API_KEY/CLOUDINARY_API_SECRET to enable Cloudinary uploads."
+  );
 }
 
-cloudinary.config({
-  cloud_name: cloudName,
-  api_key: apiKey,
-  api_secret: apiSecret,
-});
+if (isCloudinaryConfigured) {
+  cloudinary.config({
+    cloud_name: cloudName,
+    api_key: apiKey,
+    api_secret: apiSecret,
+  });
+}
 
+export { isCloudinaryConfigured };
 export default cloudinary;

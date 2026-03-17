@@ -473,6 +473,22 @@ export const manualRegistration = async (req, res) => {
       });
     }
 
+    const uploadedImageUrl = (() => {
+      if (isDebateEvent || !req.file) {
+        return null;
+      }
+
+      if (req.file.path && /^https?:\/\//i.test(req.file.path)) {
+        return req.file.path;
+      }
+
+      if (req.file.filename) {
+        return `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+      }
+
+      return null;
+    })();
+
     console.log('📝 Registering user for manual payment event:', { name, event, rollnumber });
 
     // Create registration with event-aware payment fields
@@ -493,7 +509,7 @@ export const manualRegistration = async (req, res) => {
       razorpay_signature: isDebateEvent
         ? `FREE_EVENT_${rollnumber}`
         : `MANUAL_PAYMENT_${rollnumber}`,
-      imageUrl: isDebateEvent ? null : (req.file?.path || req.file?.filename),
+      imageUrl: uploadedImageUrl,
       utrNumber: isDebateEvent ? null : normalizedUtrNumber,
       paymentStatus: isDebateEvent ? 'success' : 'pending',
       paymentAmount: resolvedPaymentAmount

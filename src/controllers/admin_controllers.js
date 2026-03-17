@@ -7,18 +7,35 @@ import { sendConfirmationEmail } from '../utils/sendMail.js';
 
 dotenv.config();
 
-// hash admin password once
-const hashedAdminPassword = bcrypt.hashSync(
-  process.env.ADMIN_PASSWORD,
-  10
-);
+let cachedAdminPasswordHash = null;
+
+const getAdminPasswordHash = () => {
+  if (cachedAdminPasswordHash) {
+    return cachedAdminPasswordHash;
+  }
+
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminPassword) {
+    return null;
+  }
+
+  cachedAdminPasswordHash = bcrypt.hashSync(adminPassword, 10);
+  return cachedAdminPasswordHash;
+};
 
 // ✅ Admin Login
 export const adminLogin = async (req, res) => {
   try {
     const { email, password } = req.body;
+    const adminEmail = process.env.ADMIN_EMAIL;
+    const jwtSecret = process.env.JWT_SECRET;
+    const hashedAdminPassword = getAdminPasswordHash();
 
-    if (email !== process.env.ADMIN_EMAIL) {
+    if (!adminEmail || !jwtSecret || !hashedAdminPassword) {
+      return res.status(500).json({ message: 'Admin auth is not configured on server.' });
+    }
+
+    if (email !== adminEmail) {
       return res.status(401).json({ message: 'Not an admin' });
     }
 
@@ -30,7 +47,7 @@ export const adminLogin = async (req, res) => {
 
     const token = jwt.sign(
       { role: 'admin' },
-      process.env.JWT_SECRET,
+      jwtSecret,
       { expiresIn: '1d' }
     );
 
